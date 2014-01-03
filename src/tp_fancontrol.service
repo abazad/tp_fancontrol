@@ -1,0 +1,8 @@
+[Unit]
+Description=Thinkpad fan control daemon
+
+[Service]
+ExecStart=/usr/local/sbin/tp_fancontrol
+
+[Install]
+WantedBy=multi-user.target

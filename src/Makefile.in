@@ -1,0 +1,29 @@
+# @configure_input@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+sbindir = @sbindir@
+srcdir  = @srcdir@
+systemdsystemunitdir = @systemdsystemunitdir@
+
+PROGRAM = tp_fancontrol
+CC      = @CC@
+CFLAGS  = @CFLAGS@
+LIBS    = @LIBS@
+LIBS 	+= @SYSTEMD_LIBS@
+#
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+all: $(PROGRAM).c
+	$(CC) $(CFLAGS) -o $(PROGRAM) $(srcdir)/$(PROGRAM).c $(LIBS)
+
+.PHONY: clean install
+
+clean:
+	rm -f *.o $(PROGRAM) *core
+
+install:
+	$(INSTALL_PROGRAM) -m 0755 $(PROGRAM) $(sbindir)/$(PROGRAM)
+	$(INSTALL_DATA) $(PROGRAM).service $(systemdsystemunitdir)/$(PROGRAM).service
