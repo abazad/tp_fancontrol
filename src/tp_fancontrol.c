@@ -59,50 +59,44 @@ struct transition_s
 {
   int st;
   int ev;
-  int (*fn)(double, double, double);
+  int (*fn)(double, double, double, double);
 };
 
-static int _clear(double temp, double temp_max, double slope)
+static int _clear(double temp, double temp_out, double min, double max)
 {
   return FAN_AUTO;
 }
 
-static int _auto(double temp, double temp_max, double slope)
+static int _auto(double temp, double temp_out, double min, double max)
 {
-  if (temp >= (temp_max - 10.0d))
+  if (temp > (max - 10.0d))
     {
       return FAN_FULLSPEED;
     }
-
+  
   return FAN_AUTO;
 }
 
-static int _fullspeed(double temp, double temp_max, double slope)
+static int _fullspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp >= temp_max)
+  if (temp > (max))
     {
       return FAN_MAXSPEED;
     }
 
-  if (temp < (temp_max - 10.0d))
+  if (temp_out < min)
     {
-      if (slope > 200.0d)
-	{
-	  return FAN_AUTO;
-	}
+      return FAN_AUTO;
     }
 
   return FAN_FULLSPEED;
 }
 
-static int _maxspeed(double temp, double temp_max, double slope)
+static int _maxspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp < (temp_max - 10.0d))
+  if (temp_out < min)
     {
-      if (slope > 200.0d)
-	{
-	  return FAN_AUTO;
-	}
+      return FAN_AUTO;
     }
 
   return FAN_MAXSPEED;
@@ -138,6 +132,7 @@ struct sensor_s
   char *max;
   int temp[__DATALEN];
   int temp_max;
+  int temp_min;
 };
 
 struct fan_s
@@ -487,13 +482,13 @@ monitor_event(int event)
 
   struct sensor_s *current;
 
-  double max, m, b, sxx, sx, sy, sxy;
+  double max, min, m, b, y, sxx, sx, sy, sxy;
 
   n = 0;
 
   m = b = sxx = sx = sy = sxy = 0;
 
-  max = 100000.0d;
+  max = min = 100000.0d;
 
   for (i = 0; i < gact.num_sensors; i++)
     {
@@ -508,7 +503,14 @@ monitor_event(int event)
 
       current->temp[0] = sys_sensor (current);
 
-      // temp max
+      if (current->temp_min > current->temp[0])
+	{
+	  current->temp_min = current->temp[0];
+	}
+
+      // temp range
+
+      min = current->temp_min < min ? current->temp_min : min;
 
       max = current->temp_max < max ? current->temp_max : max;
 
@@ -521,13 +523,13 @@ monitor_event(int event)
 	      break;
 	    }
 	  
-	  sx += j;
+	  sx += n;
 
-	  sxx += j * j;
+	  sxx += n * n;
 
 	  sy += current->temp[j];
 
-	  sxy += j * current->temp[j];
+	  sxy += n * current->temp[j];
 
 	  n++;
 	}
@@ -539,9 +541,13 @@ monitor_event(int event)
 
   b = (sy - (m * sx)) / n;
   
+  // predicted
+
+  y = (m * (n * -2.0d)) + b;
+
 #if __DEBUG__
 
-  fprintf (stderr, SD_DEBUG "%2d%15.5f%15.5f\n", j, b, m);
+  fprintf (stderr, SD_DEBUG "%15.5f%15.5f%15.5f%15.5f\n", b, y, min, max);
   
 #endif
   
@@ -561,7 +567,7 @@ monitor_event(int event)
 	    {
 	      // next
 	      
-	      gact.fan->speed = trans[t].fn (b, max, m);
+	      gact.fan->speed = trans[t].fn (b, y, min, max);
 	      
 	      if (gact.fan->speed != trans[t].st)
 		{
@@ -761,6 +767,8 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
   in->max = strdup (buf);
 
   in->temp_max = temp_max;
+
+  in->temp_min = temp_max;
 
   // data
 
