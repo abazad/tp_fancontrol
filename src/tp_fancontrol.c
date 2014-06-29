@@ -190,7 +190,7 @@ void
 display_help()
 {
   fprintf (stderr,
-	   "tp_fan_control [OPTIONS...]"
+	   "tp_fancontrol [OPTIONS...]"
 	   "\n\n"
 	   "Keep the fan running on auto unless we smell burning."
 	   "\n\n"
