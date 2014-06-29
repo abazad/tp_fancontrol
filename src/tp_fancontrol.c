@@ -35,7 +35,7 @@
 
 #define __FAN "/proc/acpi/ibm/fan"
 
-#define __CORETEMP "/sys/devices/platform/coretemp.0"
+#define __CORETEMP "/sys/devices/platform/coretemp.0/hwmon/hwmon2"
 
 #define __CORETEMPIN "1"
 
@@ -45,11 +45,11 @@
 
 enum state_e
   {    
-    FAN_ANY = 9000,
+    FAN_ANY = 8999,
     FAN_AUTO,
+    FAN_HIGHSPEED,
     FAN_FULLSPEED,
-    FAN_MAXSPEED,
-    
+
     EV_START,
     EV_TIMER,
     EV_STOP
@@ -69,21 +69,36 @@ static int _clear(double temp, double temp_out, double min, double max)
 
 static int _auto(double temp, double temp_out, double min, double max)
 {
-  if (temp > (max - 10.0d))
+  if (temp_out < min)
     {
-      return FAN_FULLSPEED;
+      return FAN_AUTO;
+    }
+
+  if (temp > (max - 20.0d))
+    {
+      return FAN_HIGHSPEED;
     }
   
   return FAN_AUTO;
 }
 
-static int _fullspeed(double temp, double temp_out, double min, double max)
+static int _highspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp > (max))
+  if (temp_out < min)
     {
-      return FAN_MAXSPEED;
+      return FAN_AUTO;
+    }
+  
+  if (temp > (max - 10.0d))
+    {
+      return FAN_FULLSPEED;
     }
 
+  return FAN_HIGHSPEED;
+}
+
+static int _fullspeed(double temp, double temp_out, double min, double max)
+{
   if (temp_out < min)
     {
       return FAN_AUTO;
@@ -92,22 +107,12 @@ static int _fullspeed(double temp, double temp_out, double min, double max)
   return FAN_FULLSPEED;
 }
 
-static int _maxspeed(double temp, double temp_out, double min, double max)
-{
-  if (temp_out < min)
-    {
-      return FAN_AUTO;
-    }
-
-  return FAN_MAXSPEED;
-}
-
 static const struct transition_s trans[] =
   {
     {FAN_ANY,       EV_START, &_clear},
     {FAN_AUTO,      EV_TIMER, &_auto},
+    {FAN_HIGHSPEED, EV_TIMER, &_highspeed},
     {FAN_FULLSPEED, EV_TIMER, &_fullspeed},
-    {FAN_MAXSPEED,  EV_TIMER, &_maxspeed},
     {FAN_ANY,       EV_STOP,  &_clear}
   };
 
@@ -568,12 +573,15 @@ monitor_event(int event)
 	      // next
 	      
 	      gact.fan->speed = trans[t].fn (b, y, min, max);
-	      
+	  
 	      if (gact.fan->speed != trans[t].st)
 		{
-		  sys_fan (gact.fan);
+		  if (sys_fan (gact.fan))
+		    {
+		      fprintf (stderr, "fan: failed to change speed\n");
+		    }
 		}
-
+	  
 	      break;
 	    }
 	}
@@ -664,7 +672,7 @@ sys_fan(struct fan_s *out)
       speed = "level auto";
 
       break;
-    case FAN_MAXSPEED:
+    case FAN_HIGHSPEED:
       speed = "level 7";
 
       break;
@@ -672,7 +680,6 @@ sys_fan(struct fan_s *out)
       speed = "level full-speed";
 
       break;
-
     default:
       speed = NULL;
 
@@ -687,11 +694,11 @@ sys_fan(struct fan_s *out)
 	}
       else
 	{
-	  fprintf(fp, "%s", speed);
+	  fprintf (fp, "%s", speed);
 
 	  fclose (fp);
 
-	  fprintf(stderr, "fan: %s\n", speed);
+	  fprintf (stderr, "fan: %s\n", speed);
 	}
     }
 
