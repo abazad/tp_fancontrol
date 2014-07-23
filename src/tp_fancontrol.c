@@ -30,12 +30,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <systemd/sd-daemon.h>
+#include <limits.h> // path max
 
 #define __DATALEN 32
 
 #define __FAN "/proc/acpi/ibm/fan"
 
-#define __CORETEMP "/sys/devices/platform/coretemp.0/hwmon/hwmon2"
+#define __CORETEMP "/sys/class/hwmon/hwmon0"
 
 #define __CORETEMPIN "1"
 
@@ -44,7 +45,7 @@
 //-----------------------------------------------------------------------------
 
 enum state_e
-  {    
+  {
     FAN_ANY = 8999,
     FAN_AUTO,
     FAN_HIGHSPEED,
@@ -78,7 +79,7 @@ static int _auto(double temp, double temp_out, double min, double max)
     {
       return FAN_HIGHSPEED;
     }
-  
+
   return FAN_AUTO;
 }
 
@@ -88,7 +89,7 @@ static int _highspeed(double temp, double temp_out, double min, double max)
     {
       return FAN_AUTO;
     }
-  
+
   if (temp > (max - 10.0d))
     {
       return FAN_FULLSPEED;
@@ -122,12 +123,13 @@ static const struct transition_s trans[] =
 // Name: Data
 //-----------------------------------------------------------------------------
 
-static const char *optstring = "h?t:";
+static const char *optstring = "h?t:m:";
 
 static const struct option longopt[] =
   {
     { "help", no_argument, NULL, 'h' },
-    { "temp",  optional_argument, NULL, 't' },
+    { "temp", required_argument, NULL, 't' },
+    { "hwmon", required_argument, NULL, 'm' },
     { NULL, no_argument, NULL, 0 }
   };
 
@@ -142,23 +144,23 @@ struct sensor_s
 
 struct fan_s
 {
-  char *output;  
+  char *output;
   int speed;
 };
 
 struct globalstate_t
 {
   int interval;
-  char *opt_fan;
-  char *opt_coretemp;
-  char opt_temp[16][4];
+  char *opt_fan; // optional fan path
+  char opt_coretemp[PATH_MAX+1]; // optional coretemp path
+  char opt_temp[16][4]; // optional sensor id numbers
   int num_opt_temp;
 
   int interrupted;
   struct fan_s *fan;
   struct sensor_s *sensors;
   int num_sensors;
-  
+
 } gact;
 
 //-----------------------------------------------------------------------------
@@ -186,7 +188,7 @@ int sys_sensor(struct sensor_s *);
 /*!
 **
 */
-void 
+void
 display_help()
 {
   fprintf (stderr,
@@ -197,10 +199,12 @@ display_help()
 	   "-h --help\t" "Show this help"
 	   "\n"
 	   "-t --temp\t" "Coretemp sensor identifier"
-	   "\n\n"
-	   "Fan:     \t" __FAN
 	   "\n"
-	   "Sensors: \t" __CORETEMP
+	   "-m --hwmon\t" "Coretemp sensors path"
+	   "\n\n"
+	   "Fan:\t" __FAN
+	   "\n"
+	   "Hwmon:\t" __CORETEMP
 	   "\n\n");
 }
 
@@ -275,7 +279,7 @@ main(int argc, char *argv[])
 
   gact.opt_fan = __FAN;
 
-  gact.opt_coretemp = __CORETEMP;
+  strncpy (gact.opt_coretemp, __CORETEMP, PATH_MAX);
 
   gact.num_opt_temp = 0;
 
@@ -299,12 +303,20 @@ main(int argc, char *argv[])
 
 	  break;
 
-	case 't':	  
+	case 't':
 	  if (gact.num_opt_temp < 16)
 	    {
 	      snprintf (&gact.opt_temp[gact.num_opt_temp][0], 4, "%s", optarg);
 
 	      gact.num_opt_temp++;
+	    }
+
+	  break;
+
+	case 'm':
+	  if (optarg != NULL)
+	    {
+	      strncpy (gact.opt_coretemp, optarg, PATH_MAX);
 	    }
 
 	  break;
@@ -420,7 +432,7 @@ monitor_init(void)
   // sensors
 
   int i;
-  
+
   for (i = 0; i < gact.num_opt_temp; ++i)
     {
       if (sys_initsensor (gact.opt_coretemp, &gact.opt_temp[i][0], &in) != 0)
@@ -429,12 +441,12 @@ monitor_init(void)
 	}
 
       gact.num_sensors = gact.num_sensors + 1;
-      
+
       gact.sensors = realloc (gact.sensors, gact.num_sensors * sizeof (in));
-      
+
       memcpy (&gact.sensors[gact.num_sensors - 1], &in, sizeof (in));
     }
-  
+
   if (gact.num_sensors == 0)
     {
       return 1;
@@ -527,7 +539,7 @@ monitor_event(int event)
 	    {
 	      break;
 	    }
-	  
+
 	  sx += n;
 
 	  sxx += n * n;
@@ -545,7 +557,7 @@ monitor_event(int event)
   m = (sxy - ((sx * sy) / n)) / (sxx - ((sx * sx) / n));
 
   b = (sy - (m * sx)) / n;
-  
+
   // predicted
 
   y = (m * (n * -2.0d)) + b;
@@ -553,9 +565,9 @@ monitor_event(int event)
 #if __DEBUG__
 
   fprintf (stderr, SD_DEBUG "%15.5f%15.5f%15.5f%15.5f\n", b, y, min, max);
-  
+
 #endif
-  
+
   // normal
 
   b /= 1000.0d;
@@ -563,7 +575,7 @@ monitor_event(int event)
   max /= 1000.0d;
 
   // transition
-  
+
   for (t = 0; t < TRANS_COUNT; t++)
     {
       if ((gact.fan->speed == trans[t].st) || (FAN_ANY == trans[t].st))
@@ -571,9 +583,9 @@ monitor_event(int event)
 	  if (event == trans[t].ev)
 	    {
 	      // next
-	      
+
 	      gact.fan->speed = trans[t].fn (b, y, min, max);
-	  
+
 	      if (gact.fan->speed != trans[t].st)
 		{
 		  if (sys_fan (gact.fan))
@@ -581,7 +593,7 @@ monitor_event(int event)
 		      fprintf (stderr, "fan: failed to change speed\n");
 		    }
 		}
-	  
+
 	      break;
 	    }
 	}
@@ -749,7 +761,7 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
   len = 0;
 
   len += snprintf (buf + len, sizeof(buf) - len, "%s", path);
-  
+
   len += snprintf (buf + len, sizeof(buf) - len, "/temp%s_max", name);
 
   if ((fp = fopen (buf, "r")) != NULL)
@@ -770,7 +782,7 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
     {
       return 1;
     }
-  
+
   in->max = strdup (buf);
 
   in->temp_max = temp_max;
