@@ -36,7 +36,7 @@
 
 #define __FAN "/proc/acpi/ibm/fan"
 
-#define __CORETEMP "/sys/class/hwmon/hwmon0"
+#define __CORETEMP "/sys/class/hwmon/"
 
 #define __CORETEMPIN "1"
 
@@ -172,6 +172,12 @@ static void monitor_deinit(void);
 static void monitor_event(int);
 
 //-----------------------------------------------------------------------------
+// Name: Path
+//-----------------------------------------------------------------------------
+
+void path_coretemp(char *, const char *, size_t len);
+
+//-----------------------------------------------------------------------------
 // Name: System
 //-----------------------------------------------------------------------------
 
@@ -279,7 +285,7 @@ main(int argc, char *argv[])
 
   gact.opt_fan = __FAN;
 
-  strncpy (gact.opt_coretemp, __CORETEMP, PATH_MAX);
+  gact.opt_coretemp[0] = '\0';
 
   gact.num_opt_temp = 0;
 
@@ -329,6 +335,15 @@ main(int argc, char *argv[])
 
       opt = getopt_long (argc, argv, optstring, longopt, &optindex);
     }
+
+  // find coretemp
+
+  if (gact.opt_coretemp[0] == '\0')
+    {
+      path_coretemp (gact.opt_coretemp, __CORETEMP, PATH_MAX);
+    }
+
+  // default sensor
 
   if (gact.num_opt_temp == 0)
     {
@@ -596,6 +611,70 @@ monitor_event(int event)
 
 	      break;
 	    }
+	}
+    }
+}
+
+//-----------------------------------------------------------------------------
+// Name: path_*
+//-----------------------------------------------------------------------------
+/*!
+**
+*/
+void 
+path_coretemp(char *path, const char *fmt, size_t pathlen)
+{
+  FILE *fp;
+
+  int i, found;
+
+  ssize_t read;
+
+  char *line;
+
+  size_t len;
+
+  for (i = 0; i < 8; i++)
+    {
+      len = 0;
+
+      len += snprintf (path + len, pathlen - len, fmt);
+      
+      len += snprintf (path + len, pathlen - len, "hwmon%d/name", i);
+
+      if ((fp = fopen (path, "r")) == NULL)
+	{
+	  continue;
+	}
+
+      len = 0;
+
+      len += snprintf (path + len, pathlen - len, fmt, i);
+      
+      line = NULL;
+
+      found = 0;
+
+      if ((read = getline (&line, &len, fp)) != -1)
+	{
+	  if (!strncmp ("coretemp", line, 8))
+	    {
+	      found = 1;
+	    }
+	}
+
+      if (line)
+	{
+	  free (line);
+
+	  line = NULL;
+	}
+
+      fclose (fp);
+
+      if (found)
+	{
+	  break;
 	}
     }
 }
