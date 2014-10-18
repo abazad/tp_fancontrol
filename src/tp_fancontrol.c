@@ -1,22 +1,21 @@
-//-----------------------------------------------------------------------------
-// Thinkpad Temperature Daemon
-//
-// Copyright (C) 2013 M.Girard
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//
-//-----------------------------------------------------------------------------
+/* 
+ * Thinkpad Temperature Daemon
+ *
+ * Copyright (C) 2013 M.Girard
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,13 +35,13 @@
 
 #define __FAN "/proc/acpi/ibm/fan"
 
-#define __CORETEMP "/sys/class/hwmon/"
+#define __HWMONPATH "/sys/class/hwmon/"
 
-#define __CORETEMPIN "1"
+#define __TEMPID "1"
 
-//-----------------------------------------------------------------------------
-// Name: State
-//-----------------------------------------------------------------------------
+/*
+ * state machine
+ */
 
 enum state_e
   {
@@ -119,9 +118,9 @@ static const struct transition_s trans[] =
 
 #define TRANS_COUNT (sizeof (trans) / sizeof (*trans))
 
-//-----------------------------------------------------------------------------
-// Name: Data
-//-----------------------------------------------------------------------------
+/*
+ * data
+ */
 
 static const char *optstring = "h?t:m:";
 
@@ -152,7 +151,7 @@ struct globalstate_t
 {
   int interval;
   char *opt_fan; // optional fan path
-  char opt_coretemp[PATH_MAX+1]; // optional coretemp path
+  char opt_hwmon[PATH_MAX+1]; // optional hwmon path
   char opt_temp[16][4]; // optional sensor id numbers
   int num_opt_temp;
 
@@ -163,24 +162,19 @@ struct globalstate_t
 
 } gact;
 
-//-----------------------------------------------------------------------------
-// Name: Daemon
-//-----------------------------------------------------------------------------
+/*
+ * daemon
+ */
 
 static int monitor_init(void);
 static void monitor_deinit(void);
 static void monitor_event(int);
 
-//-----------------------------------------------------------------------------
-// Name: Path
-//-----------------------------------------------------------------------------
+/*
+ * system
+ */
 
-void path_coretemp(char *, const char *, size_t len);
-
-//-----------------------------------------------------------------------------
-// Name: System
-//-----------------------------------------------------------------------------
-
+void sys_path_coretemp(const char *, char *, size_t);
 int sys_initfan(const char *, struct fan_s *);
 int sys_fan(struct fan_s *);
 void sys_deinitfan(struct fan_s *);
@@ -188,12 +182,9 @@ int sys_initsensor(const char *, const char *, struct sensor_s *);
 void sys_deinitsensor(struct sensor_s *);
 int sys_sensor(struct sensor_s *);
 
-//-----------------------------------------------------------------------------
-// Name: main_signal
-//-----------------------------------------------------------------------------
-/*!
-**
-*/
+/*! 
+ * help message
+ */
 void
 display_help()
 {
@@ -204,22 +195,37 @@ display_help()
 	   "\n\n"
 	   "-h --help\t" "Show this help"
 	   "\n"
-	   "-t --temp\t" "Coretemp sensor identifier"
+	   "-t --temp\t" "Sensor identifier"
 	   "\n"
-	   "-m --hwmon\t" "Coretemp sensors path"
+	   "-m --hwmon\t" "Sensor path"
 	   "\n\n"
 	   "Fan:\t" __FAN
-	   "\n"
-	   "Hwmon:\t" __CORETEMP
 	   "\n\n");
 }
 
-//-----------------------------------------------------------------------------
-// Name: main_signal
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * inputs and output fan
+ */
+void
+display_paths()
+{
+  int i;
+
+  // sensors
+
+  for (i = 0; i < gact.num_sensors; ++i)
+    {
+      fprintf (stderr, "i: %s\n", gact.sensors[i].input);
+    }
+  
+  // fan
+  
+  fprintf (stderr, "o: %s\n", gact.fan[0].output);
+}
+
+/*!
+ * signal catcher
+ */
 static void
 main_signal(int signum)
 {
@@ -236,12 +242,9 @@ main_signal(int signum)
     }
 }
 
-//-----------------------------------------------------------------------------
-// Name: main
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * main entry point
+ */
 int
 main(int argc, char *argv[])
 {
@@ -285,7 +288,7 @@ main(int argc, char *argv[])
 
   gact.opt_fan = __FAN;
 
-  gact.opt_coretemp[0] = '\0';
+  gact.opt_hwmon[0] = '\0';
 
   gact.num_opt_temp = 0;
 
@@ -308,7 +311,7 @@ main(int argc, char *argv[])
 	  exit (EXIT_SUCCESS);
 
 	  break;
-
+	  
 	case 't':
 	  if (gact.num_opt_temp < 16)
 	    {
@@ -322,7 +325,7 @@ main(int argc, char *argv[])
 	case 'm':
 	  if (optarg != NULL)
 	    {
-	      strncpy (gact.opt_coretemp, optarg, PATH_MAX);
+	      strncpy (gact.opt_hwmon, optarg, PATH_MAX);
 	    }
 
 	  break;
@@ -336,18 +339,18 @@ main(int argc, char *argv[])
       opt = getopt_long (argc, argv, optstring, longopt, &optindex);
     }
 
-  // find coretemp
+  // find the coretemp sensors
 
-  if (gact.opt_coretemp[0] == '\0')
+  if (gact.opt_hwmon[0] == '\0')
     {
-      path_coretemp (gact.opt_coretemp, __CORETEMP, PATH_MAX);
+      sys_path_coretemp (__HWMONPATH, gact.opt_hwmon, PATH_MAX);
     }
 
-  // default sensor
+  // default coretemp sensor
 
   if (gact.num_opt_temp == 0)
     {
-      strcpy (&gact.opt_temp[0][0], __CORETEMPIN);
+      strcpy (&gact.opt_temp[0][0], __TEMPID);
 
       gact.num_opt_temp++;
     }
@@ -364,6 +367,8 @@ main(int argc, char *argv[])
 
       exit (EXIT_FAILURE);
     }
+
+  display_paths ();
 
   monitor_event (EV_START);
 
@@ -420,12 +425,9 @@ main(int argc, char *argv[])
   exit (EXIT_SUCCESS);
 }
 
-//-----------------------------------------------------------------------------
-// Name: monitor_init
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * startup
+ */
 static int
 monitor_init(void)
 {
@@ -450,7 +452,7 @@ monitor_init(void)
 
   for (i = 0; i < gact.num_opt_temp; ++i)
     {
-      if (sys_initsensor (gact.opt_coretemp, &gact.opt_temp[i][0], &in) != 0)
+      if (sys_initsensor (gact.opt_hwmon, &gact.opt_temp[i][0], &in) != 0)
 	{
 	  continue;
 	}
@@ -470,12 +472,9 @@ monitor_init(void)
   return 0;
 }
 
-//-----------------------------------------------------------------------------
-// Name: monitor_deinit
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * shutdown
+ */
 static void
 monitor_deinit(void)
 {
@@ -499,12 +498,9 @@ monitor_deinit(void)
   gact.fan = NULL;
 }
 
-//-----------------------------------------------------------------------------
-// Name: monitor_event
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * temperature events
+ */
 static void
 monitor_event(int event)
 {
@@ -615,14 +611,11 @@ monitor_event(int event)
     }
 }
 
-//-----------------------------------------------------------------------------
-// Name: path_*
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * locate the coretemp sensor
+ */
 void 
-path_coretemp(char *path, const char *fmt, size_t pathlen)
+sys_path_coretemp(const char *path, char *coretemp, size_t coretemplen)
 {
   FILE *fp;
 
@@ -634,23 +627,31 @@ path_coretemp(char *path, const char *fmt, size_t pathlen)
 
   size_t len;
 
-  for (i = 0; i < 8; i++)
+  for (i = 0; ; i++)
     {
       len = 0;
 
-      len += snprintf (path + len, pathlen - len, fmt);
+      len += snprintf (coretemp + len, coretemplen - len, "%s", path);
       
-      len += snprintf (path + len, pathlen - len, "hwmon%d/name", i);
+      snprintf (coretemp + len, coretemplen - len, "hwmon%d/name", i);
 
-      if ((fp = fopen (path, "r")) == NULL)
+      fp = fopen (coretemp, "r");
+
+      if (fp)
 	{
-	  continue;
+	  snprintf (coretemp + len, coretemplen - len, "hwmon%d", i);
+	}
+      else
+	{
+	  // not found / no permissions
+
+	  coretemp[0] = '\0';
+
+	  break;
 	}
 
       len = 0;
 
-      len += snprintf (path + len, pathlen - len, fmt, i);
-      
       line = NULL;
 
       found = 0;
@@ -679,12 +680,9 @@ path_coretemp(char *path, const char *fmt, size_t pathlen)
     }
 }
 
-//-----------------------------------------------------------------------------
-// Name: sys_*fan
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * fan startup
+ */
 int
 sys_initfan(const char *fullname, struct fan_s *out)
 {
@@ -740,6 +738,9 @@ sys_initfan(const char *fullname, struct fan_s *out)
   return 0;
 }
 
+/*!
+ * fan shutdown
+ */
 void
 sys_deinitfan(struct fan_s *out)
 {
@@ -750,6 +751,9 @@ sys_deinitfan(struct fan_s *out)
   out->speed = FAN_ANY;
 }
 
+/*! 
+ * change the fan speed
+ */
 int
 sys_fan(struct fan_s *out)
 {
@@ -796,18 +800,17 @@ sys_fan(struct fan_s *out)
   return 0;
 }
 
-//-----------------------------------------------------------------------------
-// Name: sys_*sensor
-//-----------------------------------------------------------------------------
 /*!
-**
-*/
+ * sensor startup
+ */
 int
 sys_initsensor(const char *path, const char *name, struct sensor_s *in)
 {
   int len, i;
 
   char buf[256];
+  
+  int buflen = sizeof(buf) / sizeof(char);
 
   struct stat sb;
 
@@ -819,9 +822,9 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
 
   len = 0;
 
-  len += snprintf (buf + len, sizeof(buf) - len, "%s", path);
+  len += snprintf (buf + len, buflen - len, "%s", path);
 
-  len += snprintf (buf + len, sizeof(buf) - len, "/temp%s_input", name);
+  len += snprintf (buf + len, buflen - len, "/temp%s_input", name);
 
   if (stat (buf, &sb) != 0)
     {
@@ -839,9 +842,9 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
 
   len = 0;
 
-  len += snprintf (buf + len, sizeof(buf) - len, "%s", path);
+  len += snprintf (buf + len, buflen - len, "%s", path);
 
-  len += snprintf (buf + len, sizeof(buf) - len, "/temp%s_max", name);
+  len += snprintf (buf + len, buflen - len, "/temp%s_max", name);
 
   if ((fp = fopen (buf, "r")) != NULL)
     {
@@ -878,6 +881,9 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
   return 0;
 }
 
+/*!
+ * sensor shutdown
+ */
 void
 sys_deinitsensor(struct sensor_s *in)
 {
@@ -886,6 +892,9 @@ sys_deinitsensor(struct sensor_s *in)
   free (in->max);
 }
 
+/*!
+ * read the temperature from the sensor
+ */
 int
 sys_sensor(struct sensor_s *in)
 {
