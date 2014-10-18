@@ -69,7 +69,7 @@ static int _clear(double temp, double temp_out, double min, double max)
 
 static int _auto(double temp, double temp_out, double min, double max)
 {
-  if (temp_out < min)
+  if (temp_out <= min)
     {
       return FAN_AUTO;
     }
@@ -84,7 +84,12 @@ static int _auto(double temp, double temp_out, double min, double max)
 
 static int _highspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp_out < min)
+  if (temp_out <= min)
+    {
+      return FAN_AUTO;
+    }
+
+  if (temp < (min + 5.0d))
     {
       return FAN_AUTO;
     }
@@ -99,7 +104,12 @@ static int _highspeed(double temp, double temp_out, double min, double max)
 
 static int _fullspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp_out < min)
+  if (temp_out <= min)
+    {
+      return FAN_AUTO;
+    }
+
+  if (temp < (min + 5.0d))
     {
       return FAN_AUTO;
     }
