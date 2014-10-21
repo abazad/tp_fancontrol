@@ -1,5 +1,6 @@
 [Unit]
 Description=Thinkpad fan control daemon
+After=lm_sensors.service
 
 [Service]
 ExecStart=/usr/local/sbin/tp_fancontrol
