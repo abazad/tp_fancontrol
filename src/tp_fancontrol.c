@@ -69,7 +69,7 @@ static int _clear(double temp, double temp_out, double min, double max)
 
 static int _auto(double temp, double temp_out, double min, double max)
 {
-  if (temp_out <= min)
+  if (temp_out < (min + 1.0d))
     {
       return FAN_AUTO;
     }
@@ -84,12 +84,7 @@ static int _auto(double temp, double temp_out, double min, double max)
 
 static int _highspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp_out <= min)
-    {
-      return FAN_AUTO;
-    }
-
-  if (temp < (min + 5.0d))
+  if (temp_out < (min + 1.0d))
     {
       return FAN_AUTO;
     }
@@ -104,12 +99,7 @@ static int _highspeed(double temp, double temp_out, double min, double max)
 
 static int _fullspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp_out <= min)
-    {
-      return FAN_AUTO;
-    }
-
-  if (temp < (min + 5.0d))
+  if (temp_out < (min + 1.0d))
     {
       return FAN_AUTO;
     }
@@ -157,7 +147,7 @@ struct fan_s
   int speed;
 };
 
-struct globalstate_t
+static struct globalstate_t
 {
   int interval;
   char *opt_fan; // optional fan path
@@ -165,12 +155,13 @@ struct globalstate_t
   char opt_temp[16][4]; // optional sensor id numbers
   int num_opt_temp;
 
-  int interrupted;
   struct fan_s *fan;
   struct sensor_s *sensors;
   int num_sensors;
 
 } gact;
+
+static volatile sig_atomic_t interrupted = 0;
 
 /*
  * daemon
@@ -234,7 +225,9 @@ display_paths()
 }
 
 /*!
- * signal catcher
+ * signal handler
+ *
+ * man signalfd
  */
 static void
 main_signal(int signum)
@@ -246,7 +239,7 @@ main_signal(int signum)
     case SIGQUIT:
     case SIGTERM:
     case SIGALRM:
-      gact.interrupted = signum;
+      interrupted = signum;
 
       break;
     }
@@ -265,8 +258,6 @@ main(int argc, char *argv[])
   // state
 
   memset (&gact, 0, sizeof(gact));
-
-  gact.interrupted = 0;
 
   gact.sensors = NULL;
 
@@ -402,11 +393,11 @@ main(int argc, char *argv[])
 
       pause();
 
-      if (gact.interrupted == SIGHUP)
+      if (interrupted == SIGHUP)
 	{
 	  fprintf (stderr, SD_INFO "reloading **\n");
 	}
-      else if (gact.interrupted == SIGALRM)
+      else if (interrupted == SIGALRM)
 	{
 	  monitor_event (EV_TIMER);
 	}
