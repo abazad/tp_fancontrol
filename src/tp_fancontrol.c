@@ -1,4 +1,4 @@
-/* 
+/*
  * Thinkpad Temperature Daemon
  *
  * Copyright (C) 2013 M.Girard
@@ -44,16 +44,16 @@
  */
 
 enum state_e
-  {
-    FAN_ANY = 8999,
-    FAN_AUTO,
-    FAN_HIGHSPEED,
-    FAN_FULLSPEED,
+{
+  FAN_ANY = 8999,
+  FAN_AUTO,
+  FAN_HIGHSPEED,
+  FAN_FULLSPEED,
 
-    EV_START,
-    EV_TIMER,
-    EV_STOP
-  };
+  EV_START,
+  EV_TIMER,
+  EV_STOP
+};
 
 struct transition_s
 {
@@ -69,62 +69,52 @@ static int _clear(double temp, double temp_out, double min, double max)
 
 static int _auto(double temp, double temp_out, double min, double max)
 {
-  if (temp_out <= min)
-    {
-      return FAN_AUTO;
-    }
+  if (temp_out < (min + 1.0d))
+  {
+    return FAN_AUTO;
+  }
 
   if (temp > (max - 20.0d))
-    {
-      return FAN_HIGHSPEED;
-    }
+  {
+    return FAN_HIGHSPEED;
+  }
 
   return FAN_AUTO;
 }
 
 static int _highspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp_out <= min)
-    {
-      return FAN_AUTO;
-    }
-
-  if (temp < (min + 5.0d))
-    {
-      return FAN_AUTO;
-    }
+  if (temp_out < (min + 1.0d))
+  {
+    return FAN_AUTO;
+  }
 
   if (temp > (max - 10.0d))
-    {
-      return FAN_FULLSPEED;
-    }
+  {
+    return FAN_FULLSPEED;
+  }
 
   return FAN_HIGHSPEED;
 }
 
 static int _fullspeed(double temp, double temp_out, double min, double max)
 {
-  if (temp_out <= min)
-    {
-      return FAN_AUTO;
-    }
-
-  if (temp < (min + 5.0d))
-    {
-      return FAN_AUTO;
-    }
+  if (temp_out < (min + 1.0d))
+  {
+    return FAN_AUTO;
+  }
 
   return FAN_FULLSPEED;
 }
 
 static const struct transition_s trans[] =
-  {
-    {FAN_ANY,       EV_START, &_clear},
-    {FAN_AUTO,      EV_TIMER, &_auto},
-    {FAN_HIGHSPEED, EV_TIMER, &_highspeed},
-    {FAN_FULLSPEED, EV_TIMER, &_fullspeed},
-    {FAN_ANY,       EV_STOP,  &_clear}
-  };
+{
+  {FAN_ANY,       EV_START, &_clear},
+  {FAN_AUTO,      EV_TIMER, &_auto},
+  {FAN_HIGHSPEED, EV_TIMER, &_highspeed},
+  {FAN_FULLSPEED, EV_TIMER, &_fullspeed},
+  {FAN_ANY,       EV_STOP,  &_clear}
+};
 
 #define TRANS_COUNT (sizeof (trans) / sizeof (*trans))
 
@@ -135,12 +125,12 @@ static const struct transition_s trans[] =
 static const char *optstring = "h?t:m:";
 
 static const struct option longopt[] =
-  {
-    { "help", no_argument, NULL, 'h' },
-    { "temp", required_argument, NULL, 't' },
-    { "hwmon", required_argument, NULL, 'm' },
-    { NULL, no_argument, NULL, 0 }
-  };
+{
+  { "help", no_argument, NULL, 'h' },
+  { "temp", required_argument, NULL, 't' },
+  { "hwmon", required_argument, NULL, 'm' },
+  { NULL, no_argument, NULL, 0 }
+};
 
 struct sensor_s
 {
@@ -192,7 +182,7 @@ int sys_initsensor(const char *, const char *, struct sensor_s *);
 void sys_deinitsensor(struct sensor_s *);
 int sys_sensor(struct sensor_s *);
 
-/*! 
+/*!
  * help message
  */
 void
@@ -224,12 +214,12 @@ display_paths()
   // sensors
 
   for (i = 0; i < gact.num_sensors; ++i)
-    {
-      fprintf (stderr, "i: %s\n", gact.sensors[i].input);
-    }
-  
+  {
+    fprintf (stderr, "i: %s\n", gact.sensors[i].input);
+  }
+
   // fan
-  
+
   fprintf (stderr, "o: %s\n", gact.fan[0].output);
 }
 
@@ -240,16 +230,16 @@ static void
 main_signal(int signum)
 {
   switch(signum)
-    {
-    case SIGHUP:
-    case SIGINT:
-    case SIGQUIT:
-    case SIGTERM:
-    case SIGALRM:
-      gact.interrupted = signum;
-
-      break;
-    }
+  {
+  case SIGHUP:
+  case SIGINT:
+  case SIGQUIT:
+  case SIGTERM:
+  case SIGALRM:
+    gact.interrupted = signum;
+    
+    break;
+  }
 }
 
 /*!
@@ -311,59 +301,59 @@ main(int argc, char *argv[])
   opt = getopt_long (argc, argv, optstring, longopt, &optindex);
 
   while (opt != -1)
+  {
+    switch (opt)
     {
-      switch (opt)
-	{
-	case 'h':
-	case '?':
-	  display_help ();
+    case 'h':
+    case '?':
+      display_help ();
 
-	  exit (EXIT_SUCCESS);
+      exit (EXIT_SUCCESS);
 
-	  break;
-	  
-	case 't':
-	  if (gact.num_opt_temp < 16)
-	    {
-	      snprintf (&gact.opt_temp[gact.num_opt_temp][0], 4, "%s", optarg);
+      break;
 
-	      gact.num_opt_temp++;
-	    }
+    case 't':
+      if (gact.num_opt_temp < 16)
+      {
+        snprintf (&gact.opt_temp[gact.num_opt_temp][0], 4, "%s", optarg);
 
-	  break;
+        gact.num_opt_temp++;
+      }
 
-	case 'm':
-	  if (optarg != NULL)
-	    {
-	      strncpy (gact.opt_hwmon, optarg, PATH_MAX);
-	    }
+      break;
 
-	  break;
+    case 'm':
+      if (optarg != NULL)
+      {
+        strncpy (gact.opt_hwmon, optarg, PATH_MAX);
+      }
 
-	default:
-	  exit (EXIT_FAILURE);
+      break;
 
-	  break;
-	}
+    default:
+      exit (EXIT_FAILURE);
 
-      opt = getopt_long (argc, argv, optstring, longopt, &optindex);
+      break;
     }
+
+    opt = getopt_long (argc, argv, optstring, longopt, &optindex);
+  }
 
   // find the coretemp sensors
 
   if (gact.opt_hwmon[0] == '\0')
-    {
-      sys_path_coretemp (__HWMONPATH, gact.opt_hwmon, PATH_MAX);
-    }
+  {
+    sys_path_coretemp (__HWMONPATH, gact.opt_hwmon, PATH_MAX);
+  }
 
   // default coretemp sensor
 
   if (gact.num_opt_temp == 0)
-    {
-      strcpy (&gact.opt_temp[0][0], __TEMPID);
+  {
+    strcpy (&gact.opt_temp[0][0], __TEMPID);
 
-      gact.num_opt_temp++;
-    }
+    gact.num_opt_temp++;
+  }
 
   // ready
 
@@ -372,11 +362,11 @@ main(int argc, char *argv[])
   fprintf (stderr, SD_INFO "startup **\n");
 
   if (monitor_init ())
-    {
-      fprintf (stderr, SD_ERR "shutdown ** unable to initialize monitor\n");
-
-      exit (EXIT_FAILURE);
-    }
+  {
+    fprintf (stderr, SD_ERR "shutdown ** unable to initialize monitor\n");
+    
+    exit (EXIT_FAILURE);
+  }
 
   display_paths ();
 
@@ -397,24 +387,24 @@ main(int argc, char *argv[])
   setitimer (ITIMER_REAL, &it_val, NULL);
 
   while (1)
+  {
+    sd_notify (0, "WATCHDOG=1");
+
+    pause();
+
+    if (gact.interrupted == SIGHUP)
     {
-      sd_notify (0, "WATCHDOG=1");
-
-      pause();
-
-      if (gact.interrupted == SIGHUP)
-	{
-	  fprintf (stderr, SD_INFO "reloading **\n");
-	}
-      else if (gact.interrupted == SIGALRM)
-	{
-	  monitor_event (EV_TIMER);
-	}
-      else
-	{
-	  break;
-	}
+      fprintf (stderr, SD_INFO "reloading **\n");
     }
+    else if (gact.interrupted == SIGALRM)
+    {
+      monitor_event (EV_TIMER);
+    }
+    else
+    {
+      break;
+    }
+  }
 
   it_val.it_value.tv_sec = 0;
 
@@ -448,9 +438,9 @@ monitor_init(void)
   // fan
 
   if (sys_initfan (gact.opt_fan, &out) != 0)
-    {
-      return 1;
-    }
+  {
+    return 1;
+  }
 
   gact.fan = malloc (sizeof (out));
 
@@ -461,23 +451,23 @@ monitor_init(void)
   int i;
 
   for (i = 0; i < gact.num_opt_temp; ++i)
+  {
+    if (sys_initsensor (gact.opt_hwmon, &gact.opt_temp[i][0], &in) != 0)
     {
-      if (sys_initsensor (gact.opt_hwmon, &gact.opt_temp[i][0], &in) != 0)
-	{
-	  continue;
-	}
-
-      gact.num_sensors = gact.num_sensors + 1;
-
-      gact.sensors = realloc (gact.sensors, gact.num_sensors * sizeof (in));
-
-      memcpy (&gact.sensors[gact.num_sensors - 1], &in, sizeof (in));
+      continue;
     }
+
+    gact.num_sensors = gact.num_sensors + 1;
+
+    gact.sensors = realloc (gact.sensors, gact.num_sensors * sizeof (in));
+
+    memcpy (&gact.sensors[gact.num_sensors - 1], &in, sizeof (in));
+  }
 
   if (gact.num_sensors == 0)
-    {
-      return 1;
-    }
+  {
+    return 2;
+  }
 
   return 0;
 }
@@ -491,9 +481,9 @@ monitor_deinit(void)
   int i;
 
   for (i = 0; i < gact.num_sensors; i++)
-    {
-      sys_deinitsensor (&gact.sensors[i]);
-    }
+  {
+    sys_deinitsensor (&gact.sensors[i]);
+  }
 
   free (gact.sensors);
 
@@ -529,49 +519,49 @@ monitor_event(int event)
   max = min = 100000.0d;
 
   for (i = 0; i < gact.num_sensors; i++)
+  {
+    current = &gact.sensors[i];
+
+    for (j = __DATALEN - 1; j > 0; --j)
     {
-      current = &gact.sensors[i];
-
-      for (j = __DATALEN - 1; j > 0; --j)
-	{
-	  current->temp[j] = current->temp[j-1];
-	}
-
-      // temp
-
-      current->temp[0] = sys_sensor (current);
-
-      if (current->temp_min > current->temp[0])
-	{
-	  current->temp_min = current->temp[0];
-	}
-
-      // temp range
-
-      min = current->temp_min < min ? current->temp_min : min;
-
-      max = current->temp_max < max ? current->temp_max : max;
-
-      // linear regression
-
-      for (j = 0; j < __DATALEN; j++)
-	{
-	  if (current->temp[j] == 0)
-	    {
-	      break;
-	    }
-
-	  sx += n;
-
-	  sxx += n * n;
-
-	  sy += current->temp[j];
-
-	  sxy += n * current->temp[j];
-
-	  n++;
-	}
+      current->temp[j] = current->temp[j-1];
     }
+
+    // temp
+
+    current->temp[0] = sys_sensor (current);
+
+    if (current->temp_min > current->temp[0])
+    {
+      current->temp_min = current->temp[0];
+    }
+
+    // temp range
+
+    min = current->temp_min < min ? current->temp_min : min;
+
+    max = current->temp_max < max ? current->temp_max : max;
+
+    // linear regression
+
+    for (j = 0; j < __DATALEN; j++)
+    {
+      if (current->temp[j] == 0)
+      {
+        break;
+      }
+
+      sx += n;
+
+      sxx += n * n;
+
+      sy += current->temp[j];
+
+      sxy += n * current->temp[j];
+
+      n++;
+    }
+  }
 
   // y = mx + b
 
@@ -598,35 +588,39 @@ monitor_event(int event)
   // transition
 
   for (t = 0; t < TRANS_COUNT; t++)
+  {
+    if ((gact.fan->speed == trans[t].st) || (FAN_ANY == trans[t].st))
     {
-      if ((gact.fan->speed == trans[t].st) || (FAN_ANY == trans[t].st))
-	{
-	  if (event == trans[t].ev)
-	    {
-	      // next
+      if (event == trans[t].ev)
+      {
+        // next
 
-	      gact.fan->speed = trans[t].fn (b, y, min, max);
+        gact.fan->speed = trans[t].fn (b, y, min, max);
 
-	      if (gact.fan->speed != trans[t].st)
-		{
-		  if (sys_fan (gact.fan))
-		    {
-		      fprintf (stderr, "fan: failed to change speed\n");
-		    }
-		}
+        if (gact.fan->speed != trans[t].st)
+        {
+          if (sys_fan (gact.fan))
+          {
+            fprintf (stderr, "fan: failed to change speed\n");
+          }
+        }
 
-	      break;
-	    }
-	}
+        break;
+      }
     }
+  }
 }
 
 /*!
  * locate the coretemp sensor
  */
-void 
+void
 sys_path_coretemp(const char *path, char *coretemp, size_t coretemplen)
 {
+  DIR *dp;
+
+  struct dirent *dirp;
+
   FILE *fp;
 
   int i, found;
@@ -637,57 +631,67 @@ sys_path_coretemp(const char *path, char *coretemp, size_t coretemplen)
 
   size_t len;
 
-  for (i = 0; ; i++)
+  if ((dp = opendir (path)) != NULL)
+  {
+    while ((dirp = readdir (dp)) != NULL)
     {
-      len = 0;
+      if (0 == strcmp (dirp->d_name, ".") || 0 == strcmp (dirp->d_name, ".."))
+      {
+        continue;
+      }
 
-      len += snprintf (coretemp + len, coretemplen - len, "%s", path);
+      // assume all sensors are named /hwmonX/name
       
-      snprintf (coretemp + len, coretemplen - len, "hwmon%d/name", i);
-
+      snprintf (coretemp, coretemplen, "%s%s/name", path, dirp->d_name);
+      
       fp = fopen (coretemp, "r");
 
       if (fp)
-	{
-	  snprintf (coretemp + len, coretemplen - len, "hwmon%d", i);
-	}
+      {
+        // the 'name' file was found
+        
+        snprintf (coretemp, coretemplen, "%s%s", path, dirp->d_name);
+      }
       else
-	{
-	  // not found / no permissions
-
-	  coretemp[0] = '\0';
-
-	  break;
-	}
+      {
+        // the 'name' file was not found / no permissions
+        
+        coretemp[0] = '\0';
+        
+        continue;
+      }
 
       len = 0;
-
+      
       line = NULL;
-
+      
       found = 0;
 
       if ((read = getline (&line, &len, fp)) != -1)
-	{
-	  if (!strncmp ("coretemp", line, 8))
-	    {
-	      found = 1;
-	    }
-	}
-
+      {
+        if (!strncmp ("coretemp", line, 8))
+        {
+          found = 1;
+        }
+      }
+      
       if (line)
-	{
-	  free (line);
-
-	  line = NULL;
-	}
-
+      {
+        free (line);
+        
+        line = NULL;
+      }
+      
       fclose (fp);
-
+      
       if (found)
-	{
-	  break;
-	}
+      {
+        break;
+      }
     }
+  
+    closedir (dp);
+  }
 }
 
 /*!
@@ -707,37 +711,37 @@ sys_initfan(const char *fullname, struct fan_s *out)
   int module_valid = 0;
 
   if ((fp = fopen (fullname, "r+")) == NULL)
-    {
-      return 1;
-    }
+  {
+    return 1;
+  }
 
   len = 0;
 
   line = NULL;
 
   while ((read = getline (&line, &len, fp)) != -1)
+  {
+    if (!strncmp ("commands:", line, 9))
     {
-      if (!strncmp ("commands:", line, 9))
-	{
-	  module_valid = 1;
-	}
+      module_valid = 1;
     }
-
+  }
+  
   if (!module_valid)
-    {
-      return 1;
-    }
+  {
+    return 1;
+  }
 
   /*
     fprintf(fp, "watchdog %d\n", watchdog_timeout);
   */
 
   if (line)
-    {
-      free (line);
+  {
+    free (line);
 
-      line = NULL;
-    }
+    line = NULL;
+  }
 
   fclose (fp);
 
@@ -761,7 +765,7 @@ sys_deinitfan(struct fan_s *out)
   out->speed = FAN_ANY;
 }
 
-/*! 
+/*!
  * change the fan speed
  */
 int
@@ -772,40 +776,40 @@ sys_fan(struct fan_s *out)
   const char *speed;
 
   switch (out->speed)
-    {
-    case FAN_AUTO:
-      speed = "level auto";
+  {
+  case FAN_AUTO:
+    speed = "level auto";
+    
+    break;
+  case FAN_HIGHSPEED:
+    speed = "level 7";
+    
+    break;
+  case FAN_FULLSPEED:
+    speed = "level full-speed";
 
-      break;
-    case FAN_HIGHSPEED:
-      speed = "level 7";
+    break;
+  default:
+    speed = NULL;
 
-      break;
-    case FAN_FULLSPEED:
-      speed = "level full-speed";
-
-      break;
-    default:
-      speed = NULL;
-
-      break;
-    }
+    break;
+  }
 
   if (speed)
+  {
+    if ((fp = fopen (out->output, "r+")) == NULL)
     {
-      if ((fp = fopen (out->output, "r+")) == NULL)
-	{
-	  return 1;
-	}
-      else
-	{
-	  fprintf (fp, "%s", speed);
-
-	  fclose (fp);
-
-	  fprintf (stderr, "fan: %s\n", speed);
-	}
+      return 1;
     }
+    else
+    {
+      fprintf (fp, "%s", speed);
+
+      fclose (fp);
+
+      fprintf (stderr, "fan: %s\n", speed);
+    }
+  }
 
   return 0;
 }
@@ -819,7 +823,7 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
   int len, i;
 
   char buf[256];
-  
+
   int buflen = sizeof(buf) / sizeof(char);
 
   struct stat sb;
@@ -837,14 +841,14 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
   len += snprintf (buf + len, buflen - len, "/temp%s_input", name);
 
   if (stat (buf, &sb) != 0)
-    {
-      return 1;
-    }
+  {
+    return 1;
+  }
 
   if (S_ISREG (sb.st_mode) == 0)
-    {
-      return 1;
-    }
+  {
+    return 1;
+  }
 
   in->input = strdup (buf);
 
@@ -857,23 +861,23 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
   len += snprintf (buf + len, buflen - len, "/temp%s_max", name);
 
   if ((fp = fopen (buf, "r")) != NULL)
-    {
-      if (fscanf (fp, "%d", &temp_max) != 1)
-	{
-	  temp_max = 0;
-	}
-
-      fclose (fp);
-    }
-  else
+  {
+    if (fscanf (fp, "%d", &temp_max) != 1)
     {
       temp_max = 0;
     }
 
+    fclose (fp);
+  }
+  else
+  {
+    temp_max = 0;
+  }
+
   if (temp_max == 0)
-    {
-      return 1;
-    }
+  {
+    return 1;
+  }
 
   in->max = strdup (buf);
 
@@ -884,9 +888,9 @@ sys_initsensor(const char *path, const char *name, struct sensor_s *in)
   // data
 
   for (i = 0; i < __DATALEN; ++i)
-    {
-      in->temp[i] = 0;
-    }
+  {
+    in->temp[i] = 0;
+  }
 
   return 0;
 }
@@ -911,20 +915,20 @@ sys_sensor(struct sensor_s *in)
   FILE *fp;
 
   int temp;
-
+  
   if ((fp = fopen (in->input, "r")) != NULL)
-    {
-      if (fscanf (fp, "%d", &temp) != 1)
-	{
-	  temp = 0;
-	}
-
-      fclose (fp);
-    }
-  else
+  {
+    if (fscanf (fp, "%d", &temp) != 1)
     {
       temp = 0;
     }
+
+    fclose (fp);
+  }
+  else
+  {
+    temp = 0;
+  }
 
   return temp;
 }
